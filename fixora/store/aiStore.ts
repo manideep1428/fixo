@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AiFix, AiModel, AiChatMessage } from '../types/ai';
 import { INITIAL_AI_FIXES } from '../services/mockDataService';
+import { aiApi } from '../services/backendService';
 
 interface AiState {
   selectedModel: AiModel;
@@ -39,6 +40,8 @@ export const useAiStore = create<AiState>((set) => ({
     set((state) => ({
       fixes: state.fixes.map((f) => (f.id === id ? { ...f, applied: true } : f)),
     }));
+    // Persist the applied state on the backend (no-op when offline)
+    aiApi.applyFix(id).catch(() => undefined);
   },
 
   addChatMessage: (msg) => {

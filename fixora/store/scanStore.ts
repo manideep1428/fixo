@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { ScanJob } from '../types/scanner';
+import { scansApi } from '../services/backendService';
+import { connectScanSocket, type ScanProgressEvent } from '../services/scanSocket';
 
 interface ScanState {
   scans: ScanJob[];
@@ -9,6 +11,9 @@ interface ScanState {
   completeScan: (id: string) => void;
   failScan: (id: string, error: string) => void;
 }
+
+// Active sockets keyed by scan id (kept outside React state)
+const activeSockets = new Map<string, ReturnType<typeof connectScanSocket>>();
 
 export const useScanStore = create<ScanState>((set, get) => ({
   scans: [
@@ -55,24 +60,55 @@ export const useScanStore = create<ScanState>((set, get) => ({
       activeScanId: scanId,
     }));
 
-    // Step-by-step progress simulation
-    const steps = [
-      { progress: 20, step: 'Fetching HTML & running DOM visual tree audit...' },
-      { progress: 45, step: 'Evaluating Lighthouse Core Web Vitals & LCP metrics...' },
-      { progress: 70, step: 'Testing WCAG 2.1 AAA accessibility rules...' },
-      { progress: 88, step: 'Executing Ollama AI model to generate code patches...' },
-      { progress: 100, step: 'Scan complete! Analysis report generated.' },
-    ];
+    let currentId = scanId;
 
-    steps.forEach((s, idx) => {
-      setTimeout(() => {
-        if (s.progress === 100) {
-          get().completeScan(scanId);
-        } else {
-          get().updateScanProgress(scanId, s.progress, s.step);
-        }
-      }, (idx + 1) * 1200);
-    });
+    const handleEvent = (event: ScanProgressEvent) => {
+      if (event.status === 'completed') {
+        get().completeScan(currentId);
+        activeSockets.get(currentId)?.close();
+        activeSockets.delete(currentId);
+      } else if (event.status === 'failed') {
+        get().failScan(currentId, event.error || 'Unknown scan error');
+        activeSockets.delete(currentId);
+      } else {
+        get().updateScanProgress(currentId, event.progress, event.current_step);
+      }
+    };
+
+    // Real backend scan + live WebSocket progress
+    scansApi
+      .start(websiteId)
+      .then((job) => {
+        // Replace optimistic job id with the server-assigned one
+        set((state) => ({
+          scans: state.scans.map((s) =>
+            s.id === scanId ? { ...s, id: job.id, status: job.status } : s
+          ),
+          activeScanId: state.activeScanId === scanId ? job.id : state.activeScanId,
+        }));
+        currentId = job.id;
+        activeSockets.set(job.id, connectScanSocket(job.id, handleEvent));
+      })
+      .catch(() => {
+        // Offline fallback — step-by-step local simulation
+        const steps = [
+          { progress: 20, step: 'Fetching HTML & running DOM visual tree audit...' },
+          { progress: 45, step: 'Evaluating Lighthouse Core Web Vitals & LCP metrics...' },
+          { progress: 70, step: 'Testing WCAG 2.1 AAA accessibility rules...' },
+          { progress: 88, step: 'Executing Ollama AI model to generate code patches...' },
+          { progress: 100, step: 'Scan complete! Analysis report generated.' },
+        ];
+
+        steps.forEach((s, idx) => {
+          setTimeout(() => {
+            if (s.progress === 100) {
+              get().completeScan(scanId);
+            } else {
+              get().updateScanProgress(scanId, s.progress, s.step);
+            }
+          }, (idx + 1) * 1200);
+        });
+      });
 
     return newJob;
   },

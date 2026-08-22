@@ -1,18 +1,33 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { AppSidebar } from "@/components/app-sidebar"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { MOCK_REPORTS } from '@/services/mockDataService'
+import { reportsApi } from '@/services/backendService'
+import type { ReportSummary } from '@/types/report'
 import { Printer, Download, Sparkle } from '@phosphor-icons/react'
 
 export default function ReportDetailPage() {
   const params = useParams()
   const reportId = params.id as string
-  const report = MOCK_REPORTS.find((r) => r.id === reportId) || MOCK_REPORTS[0]
+  const [report, setReport] = useState<ReportSummary>(
+    () => MOCK_REPORTS.find((r) => r.id === reportId) || MOCK_REPORTS[0]
+  )
+
+  useEffect(() => {
+    // Try the real backend report first; fall back to mock data
+    reportsApi
+      .list()
+      .then((data) => {
+        const found = data.find((r) => r.id === reportId)
+        if (found) setReport(found)
+      })
+      .catch(() => undefined)
+  }, [reportId])
 
   return (
     <SidebarProvider>

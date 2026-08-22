@@ -32,9 +32,14 @@ import Link from 'next/link'
 
 export default function DashboardPage() {
   const { user } = useAuth({ ensureSignedIn: true })
-  const { websites, rescanWebsite } = useWebsiteStore()
+  const { websites, rescanWebsite, fetchWebsites } = useWebsiteStore()
   const { fixes } = useAiStore()
   const { setAddWebsiteModalOpen } = useUiStore()
+
+  // Bootstrap: pull the user's real websites from the backend on load
+  React.useEffect(() => {
+    fetchWebsites()
+  }, [fetchWebsites])
 
   // Calculate overall metrics
   const avgSeo = Math.round(websites.reduce((acc, w) => acc + (w.seo_score || 80), 0) / (websites.length || 1))

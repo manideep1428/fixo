@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useAiStore } from '../../store/aiStore'
 import { ollamaService } from '../../services/ollamaService'
+import { aiApi } from '../../services/backendService'
 import type { AiModel } from '../../types/ai'
 import { PaperPlaneRight, Robot, User, Trash, Sparkle, CircleNotch } from '@phosphor-icons/react'
 
@@ -26,27 +27,37 @@ export function AiChatPanel() {
 
     setLoading(true)
 
-    try {
-      let fullResponse = ''
-      const generator = ollamaService.stream(userPrompt, selectedModel, ollamaUrl)
+    // Placeholder assistant message updated as content arrives
+    addChatMessage({
+      role: 'assistant',
+      content: '...',
+      model: selectedModel,
+    })
 
-      // Temporary placeholder message to update as chunks stream in
-      addChatMessage({
-        role: 'assistant',
-        content: '...',
-        model: selectedModel,
+    const updateLast = (content: string) => {
+      useAiStore.setState((state) => {
+        const updated = [...state.chatMessages]
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content,
+        }
+        return { chatMessages: updated }
       })
+    }
 
-      for await (const chunk of generator) {
-        fullResponse += chunk
-        useAiStore.setState((state) => {
-          const updated = [...state.chatMessages]
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: fullResponse,
-          }
-          return { chatMessages: updated }
-        })
+    try {
+      try {
+        // Preferred path: backend /api/ai/chat/ (persists history, proxies Ollama)
+        const reply = await aiApi.chat(userPrompt, selectedModel)
+        updateLast(reply.content || '...')
+      } catch {
+        // Fallback: stream directly from local Ollama in the browser
+        let fullResponse = ''
+        const generator = ollamaService.stream(userPrompt, selectedModel, ollamaUrl)
+        for await (const chunk of generator) {
+          fullResponse += chunk
+          updateLast(fullResponse)
+        }
       }
     } catch (err) {
       console.error(err)

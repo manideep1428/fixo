@@ -94,8 +94,9 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # =========================================
-# DATABASE
+# DATABASE (CockroachDB)
 # =========================================
+
 DATABASES = {
     "default": {
         "ENGINE": "django_cockroachdb",
@@ -113,31 +114,43 @@ DATABASES = {
 AUTH_USER_MODEL = "authentication.User"
 
 # =========================================
-# REDIS CACHE
+# REDIS CACHE (falls back to local memory when REDIS_URL is not set)
 # =========================================
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config("REDIS_URL"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+_REDIS_URL = config("REDIS_URL", default="")
+
+if _REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": _REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
         }
     }
-}
 
-# =========================================
-# CHANNELS
-# =========================================
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [config("REDIS_URL")],
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [_REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "fixora-local-cache",
+        }
+    }
+
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 # =========================================
 # REST FRAMEWORK

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AppSidebar } from "@/components/app-sidebar"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
@@ -8,12 +8,31 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { ScoreGauge } from '@/components/dashboard/ScoreGauge'
 import { INITIAL_A11Y_ISSUES } from '@/services/mockDataService'
+import { analysisApi } from '@/services/backendService'
+import type { A11yIssue } from '@/types/accessibility'
+import { useWebsiteStore } from '@/store/websiteStore'
 import { Wheelchair, ShieldWarning, Sparkle, CheckCircle } from '@phosphor-icons/react'
 
 export default function AccessibilityPage() {
   const [filterLevel, setFilterLevel] = useState<string>('all')
+  const selectedWebsiteId = useWebsiteStore((s) => s.selectedWebsiteId)
+  const [issues, setIssues] = useState<A11yIssue[]>(INITIAL_A11Y_ISSUES)
+  const [score, setScore] = useState<number | null>(null)
 
-  const filteredIssues = INITIAL_A11Y_ISSUES.filter(
+  useEffect(() => {
+    if (!selectedWebsiteId) return
+    // Pull the latest real accessibility result; keep mock data as fallback
+    analysisApi
+      .latest(selectedWebsiteId)
+      .then((res) => {
+        const a11y = res.accessibility as { issues?: A11yIssue[]; score?: number } | undefined
+        if (a11y?.issues?.length) setIssues(a11y.issues)
+        if (typeof a11y?.score === 'number') setScore(a11y.score)
+      })
+      .catch(() => undefined)
+  }, [selectedWebsiteId])
+
+  const filteredIssues = issues.filter(
     (i) => filterLevel === 'all' || i.wcag_level === filterLevel
   )
 
@@ -48,7 +67,7 @@ export default function AccessibilityPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <MetricCard title="WCAG Compliance" value="96/100" icon="seo" trend="+2%" description="Passed 48/51 checks" />
+            <MetricCard title="WCAG Compliance" value={score !== null ? `${score}/100` : '96/100'} icon="seo" trend="+2%" description="Passed 48/51 checks" />
             <MetricCard title="Critical Issues" value="1" icon="scan" description="Color contrast ratio failure" />
             <MetricCard title="Passed Audit Rules" value="48" icon="check" description="No keyboard trap detected" />
             <MetricCard title="Aria Attributes" value="Clean" icon="globe" description="All interactive elements labeled" />

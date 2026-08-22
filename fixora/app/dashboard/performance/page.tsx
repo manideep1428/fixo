@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { AppSidebar } from "@/components/app-sidebar"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
@@ -9,9 +9,29 @@ import { MetricCard } from '@/components/dashboard/MetricCard'
 import { ScoreGauge } from '@/components/dashboard/ScoreGauge'
 import { CWVMetricsCard } from '@/components/performance/CWVMetricsCard'
 import { CORE_WEB_VITALS_DATA } from '@/services/mockDataService'
+import { analysisApi } from '@/services/backendService'
+import type { CoreWebVital, PerformanceResult } from '@/types/performance'
+import { useWebsiteStore } from '@/store/websiteStore'
 import { Gauge, Lightning, Timer, ArrowDown } from '@phosphor-icons/react'
 
 export default function PerformancePage() {
+  const selectedWebsiteId = useWebsiteStore((s) => s.selectedWebsiteId)
+  const [vitals, setVitals] = useState<CoreWebVital[]>(CORE_WEB_VITALS_DATA)
+  const [perfScore, setPerfScore] = useState<number>(88)
+
+  useEffect(() => {
+    if (!selectedWebsiteId) return
+    // Pull the latest real performance result; keep mock data as fallback
+    analysisApi
+      .latest(selectedWebsiteId)
+      .then((res) => {
+        const perf = res.performance as Partial<PerformanceResult> | undefined
+        if (perf?.core_web_vitals?.length) setVitals(perf.core_web_vitals)
+        if (typeof perf?.score === 'number') setPerfScore(perf.score)
+      })
+      .catch(() => undefined)
+  }, [selectedWebsiteId])
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -43,7 +63,7 @@ export default function PerformancePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <MetricCard title="Lighthouse Perf Score" value="88/100" icon="scan" trend="+6%" description="Speed Index: 1.1s" />
+            <MetricCard title="Lighthouse Perf Score" value={`${perfScore}/100`} icon="scan" trend="+6%" description="Speed Index: 1.1s" />
             <MetricCard title="Total Page Weight" value="1.2 MB" icon="globe" description="Uncompressed CSS/JS minified" />
             <MetricCard title="Time to Interactive" value="1.4 s" icon="check" description="Main thread execution speed" />
             <MetricCard title="Payload Savings" value="840 KB" icon="fix" description="Achieved via Next.js WebP" />
@@ -53,7 +73,7 @@ export default function PerformancePage() {
           <div className="space-y-3">
             <h3 className="text-base font-bold text-foreground">Google Core Web Vitals Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-              {CORE_WEB_VITALS_DATA.map((vital) => (
+              {vitals.map((vital) => (
                 <CWVMetricsCard key={vital.metric} vital={vital} />
               ))}
             </div>
@@ -83,7 +103,7 @@ export default function PerformancePage() {
             </div>
 
             <div>
-              <ScoreGauge label="Overall Speed Score" score={88} color="success" subtext="Desktop Viewport" />
+              <ScoreGauge label="Overall Speed Score" score={perfScore} color="success" subtext="Desktop Viewport" />
             </div>
           </div>
         </div>

@@ -1,15 +1,29 @@
 "use client"
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { AppSidebar } from "@/components/app-sidebar"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { MOCK_REPORTS } from '@/services/mockDataService'
+import { reportsApi } from '@/services/backendService'
+import type { ReportSummary } from '@/types/report'
 import { FileText, Download, Printer, Share, CheckCircle } from '@phosphor-icons/react'
 import Link from 'next/link'
 
 export default function ReportsPage() {
+  const [reports, setReports] = useState<ReportSummary[]>(MOCK_REPORTS)
+
+  useEffect(() => {
+    // Real reports from the backend; mock data stays as offline fallback
+    reportsApi
+      .list()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setReports(data)
+      })
+      .catch(() => undefined)
+  }, [])
+
   const handlePrint = () => {
     window.print()
   }
@@ -52,7 +66,7 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {MOCK_REPORTS.map((rep) => (
+            {reports.map((rep) => (
               <div key={rep.id} className="p-6 rounded-2xl bg-card shadow-sm space-y-4 flex flex-col justify-between">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client"
 
-import * as React from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -51,6 +51,8 @@ import { useWebsiteStore } from "@/store/websiteStore"
 import { useAiStore } from "@/store/aiStore"
 import { useScanStore } from "@/store/scanStore"
 import { MOCK_REPORTS } from "@/services/mockDataService"
+import { reportsApi } from "@/services/backendService"
+import type { ReportSummary } from "@/types/report"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
@@ -58,6 +60,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const { websites } = useWebsiteStore()
   const { fixes } = useAiStore()
+  const [reports, setReports] = useState<ReportSummary[]>(MOCK_REPORTS)
+
+  useEffect(() => {
+    // Real reports from the backend; mock data stays as offline fallback
+    reportsApi
+      .list()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) setReports(data)
+      })
+      .catch(() => undefined)
+  }, [])
   const { scans } = useScanStore()
 
   const pendingFixesCount = fixes.filter((f) => !f.applied).length
@@ -284,7 +297,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <span>PDF Reports</span>
                       </div>
                       <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-md bg-muted text-muted-foreground group-data-[collapsible=icon]:hidden">
-                        {MOCK_REPORTS.length}
+                        {reports.length}
                       </span>
                     </Link>
                   </SidebarMenuButton>
@@ -300,7 +313,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                 {openReports && (
                   <SidebarMenuSub className="mt-1">
-                    {MOCK_REPORTS.map((rep) => {
+                    {reports.map((rep) => {
                       const repUrl = `/dashboard/reports/${rep.id}`
                       const isActive = pathname === repUrl
                       return (
